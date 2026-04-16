@@ -1,0 +1,17 @@
+package com.clinic.clinicmanager.repo;
+
+import com.clinic.clinicmanager.model.BaseServiceCategory;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.Optional;
+
+@Repository
+public interface BaseServiceCategoryRepo extends JpaRepository<BaseServiceCategory, Long> {
+
+    Optional<BaseServiceCategory> findOneById(Long id);
+
+    Optional<BaseServiceCategory> findByName(String name);
+
+    Boolean existsByName(String name);
+}

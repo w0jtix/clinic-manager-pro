@@ -9,5 +9,5 @@ RUN ./mvnw clean package -DskipTests -q
 
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
-COPY --from=build /app/target/PodoCareWebsite-0.0.1-SNAPSHOT.jar app.jar
+COPY --from=build /app/target/ClinicManager-0.0.1-SNAPSHOT.jar app.jar
 ENTRYPOINT ["java", "-jar", "app.jar"]

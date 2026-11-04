@@ -1,0 +1,25 @@
+package com.clinic.clinicmanager.service;
+
+import com.clinic.clinicmanager.DTO.CategoryUsageDTO;
+import com.clinic.clinicmanager.DTO.ProductCategoryDTO;
+import com.clinic.clinicmanager.model.ProductCategory;
+
+import java.util.List;
+
+public interface ProductCategoryService {
+
+    ProductCategoryDTO getCategoryById(Long id);
+
+    List<ProductCategoryDTO> getCategories();
+
+    ProductCategoryDTO createCategory(ProductCategoryDTO category);
+
+    ProductCategoryDTO updateCategory(Long id, ProductCategoryDTO category);
+
+    void deleteCategoryById(Long id);
+
+    List<CategoryUsageDTO> getCategoryUsage();
+
+    void restoreIfHidden(ProductCategory category);
+
+}

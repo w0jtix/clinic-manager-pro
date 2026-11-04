@@ -1,0 +1,64 @@
+package com.clinic.clinicmanager.model;
+
+import com.clinic.clinicmanager.model.constants.AuditAction;
+import jakarta.persistence.*;
+import lombok.*;
+
+import java.time.LocalDateTime;
+
+@Entity
+@Getter
+@Setter
+@AllArgsConstructor
+@NoArgsConstructor
+@Builder
+@Table(name = "audit_log")
+public class AuditLog {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(nullable = false)
+    private String entityType;
+
+    @Column
+    private Long entityId;
+
+    @Column(nullable=true)
+    private String entityKeyTrait;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private AuditAction action;
+
+    @Column(nullable = false)
+    private String performedBy;
+
+    @Column(nullable = false)
+    private LocalDateTime timestamp;
+
+    @Column(columnDefinition = "TEXT")
+    private String oldValue;
+
+    @Column(columnDefinition = "TEXT")
+    private String newValue;
+
+    @Column
+    private String changedFields;
+
+    @Column
+    private String ipAddress;
+
+    @Column
+    private String sessionId;
+
+    @Column
+    private String deviceType;
+
+    @Column
+    private String browserName;
+
+    @Column(name = "clinic_device_name", length = 100)
+    private String clinicDeviceName;
+}

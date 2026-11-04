@@ -1,0 +1,35 @@
+# Node.js / React
+/fe/ClinicManager/node_modules/
+/fe/ClinicManager/.env
+
+# Secrets
+.env
+/.env.bak
+
+# Backups
+/backup-local/
+/backup-restore/
+/backup/ssh/
+/.backup-keys-confirmed
+
+# IntelliJ IDEA
+.idea/
+
+# Java
+/be/ClinicManager/target/
+/be/.idea/
+/be/logs/
+/be/ClinicManager/logs/*.log
+
+# Claude Code
+CLAUDE.md
+.claude/
+/fe/ClinicManager/dist/
+nginx/dhparam.pem
+
+# IntelliJ run configurations (may contain env secrets)
+.run/
+
+# OS junk
+.DS_Store
+Thumbs.db

@@ -1,0 +1,1351 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.5.xsd">
+
+    <changeSet id="29" author="Wojtek">
+        <sql>CREATE EXTENSION IF NOT EXISTS unaccent</sql>
+    </changeSet>
+
+    <changeSet id="30" author="Wojtek">
+        <sql splitStatements="false">
+            CREATE OR REPLACE FUNCTION public.normalize_person_name(t text)
+            RETURNS text
+            LANGUAGE sql
+            IMMUTABLE
+            AS $$
+                SELECT public.unaccent('public.unaccent'::regdictionary, lower(regexp_replace(btrim(coalesce(t, '')), '\s+', ' ', 'g')))
+            $$
+        </sql>
+        <sql splitStatements="false">
+            CREATE OR REPLACE FUNCTION public.normalize_phone(t text)
+            RETURNS text
+            LANGUAGE sql
+            IMMUTABLE
+            AS $$
+                SELECT CASE
+                           WHEN length(d) = 11 AND left(d, 2) = '48' THEN substr(d, 3)
+                           WHEN length(d) = 13 AND left(d, 4) = '0048' THEN substr(d, 5)
+                           ELSE d
+                       END
+                FROM (SELECT regexp_replace(coalesce(t, ''), '[^0-9]', '', 'g') AS d) digits
+            $$
+        </sql>
+    </changeSet>
+
+    <changeSet id="31" author="Wojtek">
+        <addColumn tableName="client">
+            <column name="birth_date" type="DATE"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="32" author="Wojtek">
+        <createTable tableName="client_card">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="client_id" type="BIGINT">
+                <constraints nullable="false"
+                             unique="true"
+                             uniqueConstraintName="uq_client_card_client"
+                             foreignKeyName="fk_client_card_client"
+                             referencedTableName="client"
+                             referencedColumnNames="id"
+                             deleteCascade="true"/>
+            </column>
+            <column name="version" type="BIGINT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by_user_id" type="BIGINT"/>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="33" author="Wojtek">
+        <createTable tableName="card_access_log">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="user_id" type="BIGINT"/>
+            <column name="ip_address" type="VARCHAR(64)"/>
+            <column name="action" type="VARCHAR(40)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="client_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="resource_type" type="VARCHAR(40)"/>
+            <column name="resource_id" type="BIGINT"/>
+        </createTable>
+
+        <createIndex tableName="card_access_log" indexName="idx_card_access_log_client_at">
+            <column name="client_id"/>
+            <column name="at"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="34" author="Wojtek">
+        <createTable tableName="questionnaire_field">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="label" type="VARCHAR(300)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="type" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="display_order" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="archived" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <sql>
+            ALTER TABLE questionnaire_field
+                ADD CONSTRAINT ck_questionnaire_field_type CHECK (type IN ('CHECKBOX', 'TEXT'))
+        </sql>
+    </changeSet>
+
+    <changeSet id="35" author="Wojtek">
+        <createTable tableName="questionnaire_answer">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="card_id" type="BIGINT">
+                <constraints nullable="false"
+                             foreignKeyName="fk_questionnaire_answer_card"
+                             referencedTableName="client_card"
+                             referencedColumnNames="id"
+                             deleteCascade="true"/>
+            </column>
+            <column name="field_id" type="BIGINT">
+                <constraints nullable="false"
+                             foreignKeyName="fk_questionnaire_answer_field"
+                             referencedTableName="questionnaire_field"
+                             referencedColumnNames="id"/>
+            </column>
+            <column name="value_enc" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addUniqueConstraint tableName="questionnaire_answer"
+                             columnNames="card_id, field_id"
+                             constraintName="uq_questionnaire_answer_card_field"/>
+
+        <createIndex tableName="questionnaire_answer" indexName="idx_questionnaire_answer_field">
+            <column name="field_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="36" author="Wojtek">
+        <addColumn tableName="client_card">
+            <column name="questionnaire_version" type="BIGINT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="questionnaire_updated_at" type="TIMESTAMP"/>
+            <column name="questionnaire_updated_by_user_id" type="BIGINT"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="37" author="Wojtek">
+        <addColumn tableName="questionnaire_field">
+            <column name="label_en" type="VARCHAR(300)"/>
+        </addColumn>
+
+        <sql>
+            ALTER TABLE questionnaire_field DROP CONSTRAINT ck_questionnaire_field_type;
+            ALTER TABLE questionnaire_field
+                ADD CONSTRAINT ck_questionnaire_field_type CHECK (type IN ('CHECKBOX', 'TEXT', 'SECTION'))
+        </sql>
+    </changeSet>
+
+    <changeSet id="38" author="Wojtek">
+        <createTable tableName="card_settings">
+            <column name="id" type="BIGINT">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="questionnaire_english_enabled" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <insert tableName="card_settings">
+            <column name="id" valueNumeric="1"/>
+            <column name="questionnaire_english_enabled" valueBoolean="false"/>
+            <column name="updated_at" valueComputed="CURRENT_TIMESTAMP"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="39" author="Wojtek">
+        <createTable tableName="drawing_template">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR(60)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="display_order" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="archived" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="archived_at" type="TIMESTAMP"/>
+            <column name="current_image_id" type="BIGINT"/>
+            <column name="created_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by_user_id" type="BIGINT"/>
+            <column name="updated_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createTable tableName="drawing_template_image">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="template_id" type="BIGINT">
+                <constraints nullable="false"
+                             foreignKeyName="fk_drawing_template_image_template"
+                             referencedTableName="drawing_template"
+                             referencedColumnNames="id"
+                             deleteCascade="true"/>
+            </column>
+            <column name="image" type="BYTEA">
+                <constraints nullable="false"/>
+            </column>
+            <column name="width" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="height" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="size_bytes" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by_user_id" type="BIGINT"/>
+        </createTable>
+
+        <createIndex tableName="drawing_template_image" indexName="idx_drawing_template_image_template">
+            <column name="template_id"/>
+        </createIndex>
+
+        <addForeignKeyConstraint baseTableName="drawing_template"
+                                 baseColumnNames="current_image_id"
+                                 constraintName="fk_drawing_template_current_image"
+                                 referencedTableName="drawing_template_image"
+                                 referencedColumnNames="id"/>
+
+        <sql>
+            ALTER TABLE drawing_template
+                ADD CONSTRAINT ck_drawing_template_archived_at CHECK (archived = (archived_at IS NOT NULL));
+            CREATE UNIQUE INDEX uq_drawing_template_name ON drawing_template (lower(name))
+        </sql>
+    </changeSet>
+
+    <changeSet id="40" author="Wojtek">
+        <createTable tableName="drawing_sheet">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="card_id" type="BIGINT">
+                <constraints nullable="false"
+                             foreignKeyName="fk_drawing_sheet_card"
+                             referencedTableName="client_card"
+                             referencedColumnNames="id"
+                             deleteCascade="true"/>
+            </column>
+            <column name="template_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="template_image_id" type="BIGINT"/>
+            <column name="sheet_number" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="width" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="height" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="VARCHAR(10)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by_user_id" type="BIGINT"/>
+            <column name="closed_at" type="TIMESTAMP"/>
+            <column name="closed_by_user_id" type="BIGINT"/>
+        </createTable>
+
+        <addForeignKeyConstraint baseTableName="drawing_sheet"
+                                 baseColumnNames="template_id"
+                                 constraintName="fk_drawing_sheet_template"
+                                 referencedTableName="drawing_template"
+                                 referencedColumnNames="id"
+                                 onDelete="RESTRICT"/>
+
+        <addForeignKeyConstraint baseTableName="drawing_sheet"
+                                 baseColumnNames="template_image_id"
+                                 constraintName="fk_drawing_sheet_template_image"
+                                 referencedTableName="drawing_template_image"
+                                 referencedColumnNames="id"
+                                 onDelete="RESTRICT"/>
+
+        <addUniqueConstraint tableName="drawing_sheet"
+                             columnNames="card_id, template_id, sheet_number"
+                             constraintName="uq_drawing_sheet_card_template_number"/>
+
+        <createIndex tableName="drawing_sheet" indexName="idx_drawing_sheet_template">
+            <column name="template_id"/>
+        </createIndex>
+
+        <createIndex tableName="drawing_sheet" indexName="idx_drawing_sheet_template_image">
+            <column name="template_image_id"/>
+        </createIndex>
+
+        <sql>
+            ALTER TABLE drawing_sheet
+                ADD CONSTRAINT ck_drawing_sheet_status CHECK (status IN ('OPEN', 'CLOSED'));
+            CREATE UNIQUE INDEX uq_drawing_sheet_open_card_template ON drawing_sheet (card_id, template_id) WHERE status = 'OPEN'
+        </sql>
+
+        <createTable tableName="drawing_layer">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="sheet_id" type="BIGINT">
+                <constraints nullable="false"
+                             foreignKeyName="fk_drawing_layer_sheet"
+                             referencedTableName="drawing_sheet"
+                             referencedColumnNames="id"
+                             deleteCascade="true"/>
+            </column>
+            <column name="author_user_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="file_key" type="VARCHAR(200)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="size_bytes" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="content_sha256" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="BIGINT" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_by_user_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addUniqueConstraint tableName="drawing_layer"
+                             columnNames="sheet_id, author_user_id"
+                             constraintName="uq_drawing_layer_sheet_author"/>
+
+        <createIndex tableName="drawing_layer" indexName="idx_drawing_layer_sheet">
+            <column name="sheet_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="41" author="Wojtek">
+        <addColumn tableName="employee">
+            <column name="drawing_color" type="VARCHAR(7)"/>
+        </addColumn>
+
+        <sql>
+            UPDATE employee e
+            SET drawing_color = (ARRAY['#2563eb', '#dc2626', '#16a34a', '#9333ea', '#ea580c',
+                                       '#0d9488', '#db2777', '#92400e', '#4f46e5', '#65a30d'])[((n.rn - 1) % 10) + 1]
+            FROM (SELECT id, row_number() OVER (ORDER BY id) AS rn FROM employee) n
+            WHERE e.id = n.id
+        </sql>
+
+        <addNotNullConstraint tableName="employee" columnName="drawing_color" columnDataType="VARCHAR(7)"/>
+
+        <sql>
+            ALTER TABLE employee
+                ADD CONSTRAINT ck_employee_drawing_color CHECK (drawing_color ~ '^#[0-9a-f]{6}$')
+        </sql>
+    </changeSet>
+
+    <changeSet id="42" author="Wojtek">
+        <createTable tableName="therapy_entry">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="card_id" type="BIGINT">
+                <constraints nullable="false"
+                             foreignKeyName="fk_therapy_entry_card"
+                             referencedTableName="client_card"
+                             referencedColumnNames="id"
+                             deleteCascade="true"/>
+            </column>
+            <column name="entry_date" type="DATE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="content_enc" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="author_user_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP"/>
+            <column name="version" type="BIGINT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="invalidated_at" type="TIMESTAMP"/>
+            <column name="invalidated_by_user_id" type="BIGINT"/>
+        </createTable>
+
+        <createIndex tableName="therapy_entry" indexName="idx_therapy_entry_card_date">
+            <column name="card_id"/>
+            <column name="entry_date"/>
+        </createIndex>
+
+        <sql>
+            CREATE UNIQUE INDEX uq_therapy_entry_card_date_valid ON therapy_entry (card_id, entry_date)
+                WHERE invalidated_at IS NULL
+        </sql>
+    </changeSet>
+
+    <changeSet id="43" author="Wojtek">
+        <createTable tableName="therapy_entry_revision">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="entry_id" type="BIGINT">
+                <constraints nullable="false"
+                             foreignKeyName="fk_therapy_entry_revision_entry"
+                             referencedTableName="therapy_entry"
+                             referencedColumnNames="id"
+                             deleteCascade="true"/>
+            </column>
+            <column name="previous_entry_date" type="DATE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="previous_content_enc" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="changed_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="changed_by_user_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="therapy_entry_revision" indexName="idx_therapy_entry_revision_entry">
+            <column name="entry_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="44" author="Wojtek">
+        <createTable tableName="client_questionnaire_revision">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="client_id" type="BIGINT">
+                <constraints nullable="false"
+                             foreignKeyName="fk_client_questionnaire_revision_client"
+                             referencedTableName="client"
+                             referencedColumnNames="id"
+                             deleteCascade="true"/>
+            </column>
+            <column name="version" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="changed_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="changed_by_user_id" type="BIGINT"/>
+            <column name="changes_enc" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="client_questionnaire_revision" indexName="idx_client_questionnaire_revision_client">
+            <column name="client_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="45" author="Wojtek">
+        <createTable tableName="client_card_data_revision">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="client_id" type="BIGINT">
+                <constraints nullable="false"
+                             foreignKeyName="fk_client_card_data_revision_client"
+                             referencedTableName="client"
+                             referencedColumnNames="id"
+                             deleteCascade="true"/>
+            </column>
+            <column name="changed_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="changed_by_user_id" type="BIGINT"/>
+            <column name="changes_enc" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="client_card_data_revision" indexName="idx_client_card_data_revision_client">
+            <column name="client_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="46" author="Wojtek">
+        <sql>
+            ALTER TABLE public.roles DROP CONSTRAINT IF EXISTS roles_name_check;
+            ALTER TABLE public.roles ADD CONSTRAINT roles_name_check
+                CHECK (name IN ('ROLE_ADMIN', 'ROLE_MASTER', 'ROLE_USER'));
+            INSERT INTO public.roles (name)
+            SELECT 'ROLE_MASTER'
+            WHERE NOT EXISTS (SELECT 1 FROM public.roles WHERE name = 'ROLE_MASTER');
+        </sql>
+    </changeSet>
+
+    <changeSet id="47" author="Wojtek">
+        <addColumn tableName="users">
+            <column name="company_pin_hash" type="VARCHAR(255)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="48" author="Wojtek">
+        <addColumn tableName="users">
+            <column name="mfa_secret_enc" type="VARCHAR(512)"/>
+            <column name="mfa_enabled_at" type="TIMESTAMP"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="49" author="Wojtek">
+        <createTable tableName="user_backup_codes">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="user_id" type="BIGINT">
+                <constraints nullable="false"
+                             foreignKeyName="fk_user_backup_codes_user"
+                             referencedTableName="users"
+                             referencedColumnNames="id"
+                             deleteCascade="true"/>
+            </column>
+            <column name="code_hash" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="used_at" type="TIMESTAMP"/>
+            <column name="created_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="user_backup_codes" indexName="idx_user_backup_codes_user">
+            <column name="user_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="50" author="Wojtek">
+        <createTable tableName="trusted_devices">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="user_id" type="BIGINT">
+                <constraints nullable="true"
+                             foreignKeyName="fk_trusted_devices_user"
+                             referencedTableName="users"
+                             referencedColumnNames="id"
+                             deleteCascade="true"/>
+            </column>
+            <column name="kind" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="token_hash" type="VARCHAR(64)">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uq_trusted_devices_token_hash"/>
+            </column>
+            <column name="previous_token_hash" type="VARCHAR(64)"/>
+            <column name="label" type="VARCHAR(255)"/>
+            <column name="user_agent" type="VARCHAR(512)"/>
+            <column name="last_ip" type="VARCHAR(64)"/>
+            <column name="created_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_used_at" type="TIMESTAMP"/>
+            <column name="expires_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="revoked_at" type="TIMESTAMP"/>
+        </createTable>
+
+        <createIndex tableName="trusted_devices" indexName="idx_trusted_devices_previous_token_hash">
+            <column name="previous_token_hash"/>
+        </createIndex>
+
+        <createIndex tableName="trusted_devices" indexName="idx_trusted_devices_user_kind">
+            <column name="user_id"/>
+            <column name="kind"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="51" author="Wojtek">
+        <sql>ALTER TABLE audit_log DROP CONSTRAINT IF EXISTS audit_log_action_check</sql>
+        <sql>ALTER TABLE audit_log ADD CONSTRAINT audit_log_action_check CHECK (action IN ('CREATE', 'UPDATE', 'DELETE', 'SEND', 'SECURITY'))</sql>
+    </changeSet>
+
+    <changeSet id="52" author="Wojtek">
+        <sql>
+            UPDATE audit_log
+            SET action = 'SECURITY'
+            WHERE entity_type IN (
+                'User-Login',
+                'Master-Elevation',
+                'Master-Demotion',
+                'User-Elevation',
+                'User-Demotion',
+                'Security-Block',
+                'Security-ShadowBan',
+                'Security-PinFailure',
+                'Security-PinBlock',
+                'Security-2FA-Failure',
+                'Security-2FA-Block',
+                'Security-MfaFailure',
+                'Security-MfaBlock',
+                'Security-TrustedDeviceReuse',
+                'User-2FA-Enabled',
+                'User-2FA-Disabled',
+                'User-2FA-Reset',
+                'User-2FA-BackupCodes-Regenerated',
+                'User-2FA-BackupCode-Used',
+                'User-MfaEnabled',
+                'User-MfaDisabled',
+                'User-MfaReset',
+                'User-BackupCodesRegenerated',
+                'User-BackupCodeUsed',
+                'User-TrustedDeviceRevoked',
+                'User-Password',
+                'User-CompanyPin'
+            )
+        </sql>
+    </changeSet>
+
+    <changeSet id="53" author="Wojtek">
+        <sql>UPDATE audit_log SET entity_type = 'User-2FA-TrustedDevice-Revoked' WHERE entity_type = 'User-TrustedDeviceRevoked'</sql>
+        <sql>UPDATE audit_log SET entity_type = 'Security-2FA-TrustedDevice-Reuse' WHERE entity_type = 'Security-TrustedDeviceReuse'</sql>
+    </changeSet>
+
+    <changeSet id="54" author="Wojtek">
+        <dropNotNullConstraint tableName="trusted_devices" columnName="expires_at" columnDataType="TIMESTAMP"/>
+
+        <addColumn tableName="trusted_devices">
+            <column name="name" type="VARCHAR(100)"/>
+            <column name="registered_by" type="VARCHAR(255)"/>
+            <column name="last_seen_username" type="VARCHAR(255)"/>
+            <column name="suspected_copy_at" type="TIMESTAMP"/>
+            <column name="replaced_by_id" type="BIGINT">
+                <constraints nullable="true"
+                             foreignKeyName="fk_trusted_devices_replaced_by"
+                             referencedTableName="trusted_devices"
+                             referencedColumnNames="id"/>
+            </column>
+        </addColumn>
+
+        <createIndex tableName="trusted_devices" indexName="idx_trusted_devices_kind_revoked">
+            <column name="kind"/>
+            <column name="revoked_at"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="55" author="Wojtek">
+        <createTable tableName="device_registration_codes">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="code" type="VARCHAR(6)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR(100)"/>
+            <column name="replace_device_id" type="BIGINT">
+                <constraints nullable="true"
+                             foreignKeyName="fk_device_registration_codes_replace_device"
+                             referencedTableName="trusted_devices"
+                             referencedColumnNames="id"/>
+            </column>
+            <column name="created_by" type="VARCHAR(255)"/>
+            <column name="created_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="expires_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="used_at" type="TIMESTAMP"/>
+            <column name="cancelled_at" type="TIMESTAMP"/>
+        </createTable>
+
+        <createIndex tableName="device_registration_codes" indexName="idx_device_registration_codes_code">
+            <column name="code"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="56" author="Wojtek">
+        <addColumn tableName="card_access_log">
+            <column name="device_name" type="VARCHAR(100)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="57" author="Wojtek">
+        <dropForeignKeyConstraint baseTableName="trusted_devices" constraintName="fk_trusted_devices_replaced_by"/>
+        <addForeignKeyConstraint baseTableName="trusted_devices"
+                                 baseColumnNames="replaced_by_id"
+                                 constraintName="fk_trusted_devices_replaced_by"
+                                 referencedTableName="trusted_devices"
+                                 referencedColumnNames="id"
+                                 onDelete="SET NULL"/>
+
+        <dropForeignKeyConstraint baseTableName="device_registration_codes" constraintName="fk_device_registration_codes_replace_device"/>
+        <addForeignKeyConstraint baseTableName="device_registration_codes"
+                                 baseColumnNames="replace_device_id"
+                                 constraintName="fk_device_registration_codes_replace_device"
+                                 referencedTableName="trusted_devices"
+                                 referencedColumnNames="id"
+                                 onDelete="SET NULL"/>
+    </changeSet>
+
+    <changeSet id="58" author="Wojtek">
+        <dropNotNullConstraint tableName="audit_log" columnName="entity_id" columnDataType="BIGINT"/>
+    </changeSet>
+
+    <changeSet id="59" author="Wojtek">
+        <addColumn tableName="audit_log">
+            <column name="clinic_device_name" type="VARCHAR(100)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="60" author="Wojtek">
+        <createTable tableName="access_control_settings">
+            <column name="id" type="BIGINT">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="gate_enabled" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="paused_until" type="TIMESTAMP"/>
+            <column name="paused_by" type="VARCHAR(255)"/>
+            <column name="hours_enabled" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP"/>
+            <column name="updated_by" type="VARCHAR(255)"/>
+        </createTable>
+
+        <insert tableName="access_control_settings">
+            <column name="id" valueNumeric="1"/>
+            <column name="gate_enabled" valueBoolean="false"/>
+            <column name="hours_enabled" valueBoolean="false"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="61" author="Wojtek">
+        <createTable tableName="clinic_working_hours">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="day_of_week" type="SMALLINT">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uq_clinic_working_hours_day"/>
+            </column>
+            <column name="is_open" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="start_time" type="TIME"/>
+            <column name="end_time" type="TIME"/>
+        </createTable>
+
+        <insert tableName="clinic_working_hours">
+            <column name="day_of_week" valueNumeric="1"/>
+            <column name="is_open" valueBoolean="false"/>
+        </insert>
+        <insert tableName="clinic_working_hours">
+            <column name="day_of_week" valueNumeric="2"/>
+            <column name="is_open" valueBoolean="false"/>
+        </insert>
+        <insert tableName="clinic_working_hours">
+            <column name="day_of_week" valueNumeric="3"/>
+            <column name="is_open" valueBoolean="false"/>
+        </insert>
+        <insert tableName="clinic_working_hours">
+            <column name="day_of_week" valueNumeric="4"/>
+            <column name="is_open" valueBoolean="false"/>
+        </insert>
+        <insert tableName="clinic_working_hours">
+            <column name="day_of_week" valueNumeric="5"/>
+            <column name="is_open" valueBoolean="false"/>
+        </insert>
+        <insert tableName="clinic_working_hours">
+            <column name="day_of_week" valueNumeric="6"/>
+            <column name="is_open" valueBoolean="false"/>
+        </insert>
+        <insert tableName="clinic_working_hours">
+            <column name="day_of_week" valueNumeric="7"/>
+            <column name="is_open" valueBoolean="false"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="62" author="Wojtek">
+        <addColumn tableName="trusted_devices">
+            <column name="rotated_at" type="TIMESTAMP"/>
+            <column name="last_user_agent_hash" type="VARCHAR(64)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="63" author="Wojtek">
+        <addColumn tableName="users">
+            <column name="card_theme" type="VARCHAR(10)" defaultValue="LIGHT">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="64" author="Wojtek">
+        <addColumn tableName="client">
+            <column name="remarks" type="TEXT"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="65" author="Wojtek">
+        <sql>
+            DELETE FROM drawing_layer;
+            DELETE FROM drawing_sheet
+        </sql>
+    </changeSet>
+
+    <changeSet id="66" author="Wojtek">
+        <createTable tableName="drawing_marker">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR(40)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="shape" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="color" type="VARCHAR(7)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="filled" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="display_order" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by_user_id" type="BIGINT"/>
+            <column name="updated_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <sql>
+            CREATE UNIQUE INDEX uq_drawing_marker_name ON drawing_marker (lower(name))
+        </sql>
+    </changeSet>
+
+    <changeSet id="67" author="Wojtek">
+        <createIndex tableName="visit" indexName="idx_visit_client_id_date">
+            <column name="client_id"/>
+            <column name="date"/>
+        </createIndex>
+
+        <createIndex tableName="client_debt" indexName="idx_client_debt_visit_id">
+            <column name="visit_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="68" author="Wojtek">
+        <addColumn tableName="product_category">
+            <column name="is_system" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="is_deleted" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+
+        <sql>
+            UPDATE product_category SET is_system = true WHERE name = 'Produkty'
+        </sql>
+    </changeSet>
+
+    <changeSet id="69" author="Wojtek">
+        <sql splitStatements="false">
+            DO $$
+            DECLARE
+                r record;
+            BEGIN
+                FOR r IN
+                    SELECT con.conname, rel.relname
+                    FROM pg_constraint con
+                    JOIN pg_class rel ON rel.oid = con.conrelid
+                    JOIN pg_namespace ns ON ns.oid = rel.relnamespace
+                    JOIN pg_attribute att ON att.attrelid = con.conrelid AND att.attnum = con.conkey[1]
+                    WHERE con.contype = 'u'
+                      AND ns.nspname = 'public'
+                      AND rel.relname IN ('product_category', 'service_category')
+                      AND array_length(con.conkey, 1) = 1
+                      AND att.attname = 'color'
+                LOOP
+                    EXECUTE format('ALTER TABLE public.%I DROP CONSTRAINT %I', r.relname, r.conname);
+                END LOOP;
+            END
+            $$
+        </sql>
+
+        <sql>
+            CREATE UNIQUE INDEX uq_product_category_color_active ON product_category (color) WHERE is_deleted = false
+        </sql>
+
+        <sql>
+            CREATE UNIQUE INDEX uq_service_category_color_active ON service_category (color) WHERE is_deleted = false
+        </sql>
+    </changeSet>
+
+    <changeSet id="70" author="Wojtek">
+        <sql>
+            CREATE UNIQUE INDEX uq_product_category_name_ci ON product_category (lower(btrim(name)))
+        </sql>
+
+        <sql>
+            CREATE UNIQUE INDEX uq_service_category_name_ci ON service_category (lower(btrim(name)))
+        </sql>
+    </changeSet>
+
+    <changeSet id="71" author="Wojtek">
+        <createTable tableName="expense_category">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="code" type="VARCHAR(40)">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uq_expense_category_code"/>
+            </column>
+            <column name="name" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="color" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="is_system" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="is_internal" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <insert tableName="expense_category">
+            <column name="code" value="RENT"/>
+            <column name="name" value="Czynsz"/>
+            <column name="color" value="255,70,162"/>
+            <column name="is_system" valueBoolean="true"/>
+            <column name="is_internal" valueBoolean="false"/>
+        </insert>
+        <insert tableName="expense_category">
+            <column name="code" value="TAXES"/>
+            <column name="name" value="Podatki"/>
+            <column name="color" value="220,20,60"/>
+            <column name="is_system" valueBoolean="true"/>
+            <column name="is_internal" valueBoolean="false"/>
+        </insert>
+        <insert tableName="expense_category">
+            <column name="code" value="ZUS"/>
+            <column name="name" value="ZUS"/>
+            <column name="color" value="30,144,255"/>
+            <column name="is_system" valueBoolean="true"/>
+            <column name="is_internal" valueBoolean="false"/>
+        </insert>
+        <insert tableName="expense_category">
+            <column name="code" value="PRODUCTS"/>
+            <column name="name" value="Produkty"/>
+            <column name="color" value="255,215,0"/>
+            <column name="is_system" valueBoolean="true"/>
+            <column name="is_internal" valueBoolean="false"/>
+        </insert>
+        <insert tableName="expense_category">
+            <column name="code" value="EQUIPMENT"/>
+            <column name="name" value="Gabinetowe"/>
+            <column name="color" value="89,10,252"/>
+            <column name="is_system" valueBoolean="false"/>
+            <column name="is_internal" valueBoolean="false"/>
+        </insert>
+        <insert tableName="expense_category">
+            <column name="code" value="SALARY"/>
+            <column name="name" value="Pensje"/>
+            <column name="color" value="2,189,2"/>
+            <column name="is_system" valueBoolean="true"/>
+            <column name="is_internal" valueBoolean="false"/>
+        </insert>
+        <insert tableName="expense_category">
+            <column name="code" value="SERVICES"/>
+            <column name="name" value="Usługi"/>
+            <column name="color" value="0,206,209"/>
+            <column name="is_system" valueBoolean="false"/>
+            <column name="is_internal" valueBoolean="false"/>
+        </insert>
+        <insert tableName="expense_category">
+            <column name="code" value="CAR"/>
+            <column name="name" value="Auto"/>
+            <column name="color" value="252,85,5"/>
+            <column name="is_system" valueBoolean="false"/>
+            <column name="is_internal" valueBoolean="false"/>
+        </insert>
+        <insert tableName="expense_category">
+            <column name="code" value="TRAINING"/>
+            <column name="name" value="Szkolenia"/>
+            <column name="color" value="15,252,150"/>
+            <column name="is_system" valueBoolean="false"/>
+            <column name="is_internal" valueBoolean="false"/>
+        </insert>
+        <insert tableName="expense_category">
+            <column name="code" value="SUPPLIES"/>
+            <column name="name" value="Zaopatrzenie"/>
+            <column name="color" value="248,131,252"/>
+            <column name="is_system" valueBoolean="false"/>
+            <column name="is_internal" valueBoolean="false"/>
+        </insert>
+        <insert tableName="expense_category">
+            <column name="code" value="UNRELATED"/>
+            <column name="name" value="Niezwiązane"/>
+            <column name="color" value="225,225,225"/>
+            <column name="is_system" valueBoolean="true"/>
+            <column name="is_internal" valueBoolean="false"/>
+        </insert>
+        <insert tableName="expense_category">
+            <column name="code" value="OTHER"/>
+            <column name="name" value="Inne"/>
+            <column name="color" value="255,140,0"/>
+            <column name="is_system" valueBoolean="false"/>
+            <column name="is_internal" valueBoolean="false"/>
+        </insert>
+        <insert tableName="expense_category">
+            <column name="code" value="MIXED"/>
+            <column name="name" value="Mieszana"/>
+            <column name="color" value="150,150,150"/>
+            <column name="is_system" valueBoolean="true"/>
+            <column name="is_internal" valueBoolean="true"/>
+        </insert>
+
+        <sql>
+            CREATE UNIQUE INDEX uq_expense_category_name_ci ON expense_category (lower(btrim(name)))
+        </sql>
+
+        <sql>
+            CREATE UNIQUE INDEX uq_expense_category_color ON expense_category (color)
+        </sql>
+    </changeSet>
+
+    <changeSet id="72" author="Wojtek">
+        <sql>
+            ALTER TABLE company_expense DROP CONSTRAINT IF EXISTS company_expense_category_check
+        </sql>
+
+        <addForeignKeyConstraint baseTableName="company_expense"
+                                 baseColumnNames="category"
+                                 constraintName="fk_company_expense_category"
+                                 referencedTableName="expense_category"
+                                 referencedColumnNames="code"/>
+
+        <addForeignKeyConstraint baseTableName="company_expense_item"
+                                 baseColumnNames="category"
+                                 constraintName="fk_company_expense_item_category"
+                                 referencedTableName="expense_category"
+                                 referencedColumnNames="code"/>
+
+        <addForeignKeyConstraint baseTableName="ksef_invoice"
+                                 baseColumnNames="category"
+                                 constraintName="fk_ksef_invoice_category"
+                                 referencedTableName="expense_category"
+                                 referencedColumnNames="code"/>
+
+        <addForeignKeyConstraint baseTableName="ksef_seller"
+                                 baseColumnNames="default_expense_category"
+                                 constraintName="fk_ksef_seller_default_expense_category"
+                                 referencedTableName="expense_category"
+                                 referencedColumnNames="code"/>
+    </changeSet>
+
+    <changeSet id="73" author="Wojtek">
+        <addColumn tableName="client_debt">
+            <column name="reason" type="VARCHAR(500)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="74" author="Wojtek">
+        <dropNotNullConstraint tableName="users" columnName="avatar" columnDataType="VARCHAR(255)"/>
+
+        <sql>
+            WITH avatar_catalog AS (
+                SELECT 'avatar' || n || '.png' AS avatar, n AS ord
+                FROM generate_series(1, 20) AS n
+            ),
+            keepers AS (
+                SELECT DISTINCT ON (u.avatar) u.id
+                FROM users u
+                JOIN avatar_catalog c ON c.avatar = u.avatar
+                ORDER BY u.avatar, u.id
+            ),
+            to_fix AS (
+                SELECT u.id, ROW_NUMBER() OVER (ORDER BY u.id) AS rn
+                FROM users u
+                WHERE u.avatar IS NOT NULL
+                  AND u.id NOT IN (SELECT id FROM keepers)
+            ),
+            free_avatars AS (
+                SELECT c.avatar, ROW_NUMBER() OVER (ORDER BY c.ord) AS rn
+                FROM avatar_catalog c
+                WHERE NOT EXISTS (SELECT 1 FROM users u WHERE u.avatar = c.avatar)
+            )
+            UPDATE users u
+            SET avatar = f.avatar
+            FROM to_fix t
+            LEFT JOIN free_avatars f ON f.rn = t.rn
+            WHERE u.id = t.id
+        </sql>
+    </changeSet>
+
+    <changeSet id="75" author="Wojtek">
+        <sql>
+            CREATE UNIQUE INDEX uq_users_avatar ON users (avatar) WHERE avatar IS NOT NULL
+        </sql>
+    </changeSet>
+
+    <changeSet id="76" author="Wojtek">
+        <addColumn tableName="company_expense">
+            <column name="invoice_number" type="VARCHAR(64)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="77" author="Wojtek">
+        <modifyDataType tableName="ksef_seller" columnName="nip" newDataType="VARCHAR(20)"/>
+    </changeSet>
+
+    <changeSet id="78" author="Wojtek">
+        <addColumn tableName="company_expense">
+            <column name="currency" type="VARCHAR(3)" defaultValue="PLN">
+                <constraints nullable="false"/>
+            </column>
+            <column name="exchange_rate" type="NUMERIC(10,4)"/>
+            <column name="exchange_rate_date" type="DATE"/>
+            <column name="exchange_rate_table" type="VARCHAR(32)"/>
+            <column name="total_net_currency" type="NUMERIC(15,2)"/>
+            <column name="total_vat_currency" type="NUMERIC(15,2)"/>
+            <column name="total_value_currency" type="NUMERIC(15,2)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="79" author="Wojtek">
+        <createTable tableName="exchange_rate">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="currency" type="VARCHAR(3)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="rate_date" type="DATE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="mid" type="NUMERIC(10,4)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="table_no" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="fetched_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addUniqueConstraint tableName="exchange_rate"
+                             columnNames="currency, rate_date"
+                             constraintName="uq_exchange_rate_currency_date"/>
+    </changeSet>
+
+    <changeSet id="80" author="Wojtek">
+        <createView viewName="product_purchase" replaceIfExists="true">
+            SELECT
+                kii.product_id AS product_id,
+                'KSEF' AS source_type,
+                kii.id AS source_id,
+                ki.issue_date AS purchase_date,
+                CAST(COALESCE(kii.net_value / NULLIF(kii.declared_quantity, 0), kii.unit_net_price) AS NUMERIC(15,4)) AS unit_net_price,
+                CAST(NULL AS NUMERIC(15,4)) AS unit_gross_price,
+                kii.declared_quantity AS quantity,
+                kii.vat_rate AS vat_rate
+            FROM ksef_invoice_item kii
+            JOIN ksef_invoice ki ON ki.id = kii.invoice_id
+            WHERE kii.product_id IS NOT NULL
+              AND kii.declared_quantity IS NOT NULL
+              AND kii.declared_quantity > 0
+            UNION ALL
+            SELECT
+                cei.product_id AS product_id,
+                'MANUAL' AS source_type,
+                cei.id AS source_id,
+                ce.expense_date AS purchase_date,
+                CAST(NULL AS NUMERIC(15,4)) AS unit_net_price,
+                CAST(cei.price * COALESCE(ce.exchange_rate, 1) AS NUMERIC(15,4)) AS unit_gross_price,
+                cei.quantity AS quantity,
+                cei.vat_rate AS vat_rate
+            FROM company_expense_item cei
+            JOIN company_expense ce ON ce.id = cei.company_expense_id
+            WHERE cei.product_id IS NOT NULL
+              AND cei.quantity IS NOT NULL
+              AND cei.quantity > 0
+        </createView>
+    </changeSet>
+
+    <changeSet id="81" author="Wojtek">
+        <createView viewName="expense_category_amount" replaceIfExists="true">
+            SELECT
+                'MANUAL' AS source_type,
+                ce.id AS source_id,
+                CAST(NULL AS BIGINT) AS source_item_id,
+                ce.expense_date AS expense_date,
+                ce.category AS category,
+                CAST(ce.total_net AS NUMERIC(15,2)) AS total_net,
+                CAST(ce.total_vat AS NUMERIC(15,2)) AS total_vat,
+                CAST(ce.total_value AS NUMERIC(15,2)) AS total_value,
+                ce.seller_id AS seller_id
+            FROM company_expense ce
+            WHERE ce.category &lt;&gt; 'MIXED'
+            UNION ALL
+            SELECT
+                'MANUAL' AS source_type,
+                ce.id AS source_id,
+                it.item_id AS source_item_id,
+                ce.expense_date AS expense_date,
+                it.category AS category,
+                CAST(ROUND(it.gross - it.vat, 2) AS NUMERIC(15,2)) AS total_net,
+                CAST(it.vat AS NUMERIC(15,2)) AS total_vat,
+                CAST(ROUND(it.gross, 2) AS NUMERIC(15,2)) AS total_value,
+                ce.seller_id AS seller_id
+            FROM (
+                SELECT
+                    g.item_id,
+                    g.company_expense_id,
+                    g.category,
+                    g.gross * g.rate AS gross,
+                    ROUND(ROUND(g.gross * g.vat_percent / (100 + g.vat_percent), 2) * g.rate, 2) AS vat
+                FROM (
+                    SELECT
+                        cei.id AS item_id,
+                        cei.company_expense_id AS company_expense_id,
+                        cei.category AS category,
+                        CAST(cei.price AS NUMERIC) * cei.quantity AS gross,
+                        CAST(COALESCE(ce.exchange_rate, 1) AS NUMERIC) AS rate,
+                        CAST(CASE cei.vat_rate
+                            WHEN 'VAT_23' THEN 23
+                            WHEN 'VAT_8' THEN 8
+                            WHEN 'VAT_7' THEN 7
+                            WHEN 'VAT_5' THEN 5
+                            ELSE 0
+                        END AS NUMERIC) AS vat_percent
+                    FROM company_expense_item cei
+                    JOIN company_expense ce ON ce.id = cei.company_expense_id
+                ) g
+            ) it
+            JOIN company_expense ce ON ce.id = it.company_expense_id
+            WHERE ce.category = 'MIXED'
+            UNION ALL
+            SELECT
+                'KSEF' AS source_type,
+                ki.id AS source_id,
+                CAST(NULL AS BIGINT) AS source_item_id,
+                ki.issue_date AS expense_date,
+                ki.category AS category,
+                CAST(ki.net_amount AS NUMERIC(15,2)) AS total_net,
+                CAST(ki.vat_amount AS NUMERIC(15,2)) AS total_vat,
+                CAST(ki.gross_amount AS NUMERIC(15,2)) AS total_value,
+                ki.seller_id AS seller_id
+            FROM ksef_invoice ki
+            JOIN ksef_seller ks ON ks.id = ki.seller_id
+        </createView>
+    </changeSet>
+
+    <changeSet id="82" author="Wojtek">
+        <createView viewName="expense_unified" replaceIfExists="true">
+            SELECT
+                ('MANUAL-' || ce.id) AS unified_id,
+                ce.id AS source_id,
+                'MANUAL' AS source_type,
+                ce.source AS source,
+                ce.expense_date AS expense_date,
+                ce.category AS category,
+                CAST(ce.total_net AS NUMERIC(15,2)) AS total_net,
+                CAST(ce.total_vat AS NUMERIC(15,2)) AS total_vat,
+                CAST(ce.total_value AS NUMERIC(15,2)) AS total_value,
+                CAST(false AS BOOLEAN) AS awaiting_product_verification,
+                CAST(NULL AS VARCHAR) AS seller_default_expense_category,
+                CAST(NULL AS VARCHAR) AS invoice_type,
+                ce.seller_id AS seller_id,
+                CAST(ce.currency AS VARCHAR(3)) AS currency,
+                CAST(ce.total_value_currency AS NUMERIC(15,2)) AS total_value_currency
+            FROM company_expense ce
+            UNION ALL
+            SELECT
+                ('KSEF-' || ki.id) AS unified_id,
+                ki.id AS source_id,
+                'KSEF' AS source_type,
+                ks.name AS source,
+                ki.issue_date AS expense_date,
+                ki.category AS category,
+                CAST(ki.net_amount AS NUMERIC(15,2)) AS total_net,
+                CAST(ki.vat_amount AS NUMERIC(15,2)) AS total_vat,
+                CAST(ki.gross_amount AS NUMERIC(15,2)) AS total_value,
+                ki.awaiting_product_verification AS awaiting_product_verification,
+                ks.default_expense_category AS seller_default_expense_category,
+                ki.invoice_type AS invoice_type,
+                ki.seller_id AS seller_id,
+                CAST('PLN' AS VARCHAR(3)) AS currency,
+                CAST(NULL AS NUMERIC(15,2)) AS total_value_currency
+            FROM ksef_invoice ki
+            JOIN ksef_seller ks ON ks.id = ki.seller_id
+        </createView>
+    </changeSet>
+
+</databaseChangeLog>

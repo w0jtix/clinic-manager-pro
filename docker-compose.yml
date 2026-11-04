@@ -1,0 +1,123 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_DB: clinicmanager
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    ports:
+      - "127.0.0.1:6379:6379"
+
+  spring-boot:
+    build:
+      context: ./be/ClinicManager
+      dockerfile: Dockerfile
+      args:
+        GITHUB_USERNAME: ${GITHUB_USERNAME}
+      secrets:
+        - github_token
+    restart: always
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/clinicmanager
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_REDIS_HOST: redis
+      TZ: Europe/Warsaw
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Europe/Warsaw
+      JWT_SECRET: ${JWT_SECRET}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+      KSEF_ENCRYPTION_KEY: ${KSEF_ENCRYPTION_KEY}
+      CARD_ENCRYPTION_KEY: ${CARD_ENCRYPTION_KEY}
+      MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY}
+      MFA_COOKIE_SECURE: ${MFA_COOKIE_SECURE:-true}
+      ADMIN_INITIAL_USERNAME: ${ADMIN_INITIAL_USERNAME:-}
+      ADMIN_INITIAL_PASSWORD: ${ADMIN_INITIAL_PASSWORD:-}
+      DEVICE_COOKIE_SECURE: ${DEVICE_COOKIE_SECURE:-true}
+      DEVICE_REUSE_GRACE_SECONDS: ${DEVICE_REUSE_GRACE_SECONDS:-120}
+      CARD_STORAGE_PATH: /app/data/card-files
+      MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-${MAIL_USERNAME:-}}
+    volumes:
+      - card_files:/app/data/card-files
+    depends_on:
+      - postgres
+      - redis
+
+  frontend:
+    build:
+      context: ./fe/ClinicManager
+      dockerfile: Dockerfile
+    restart: always
+
+  certbot:
+    image: certbot/certbot
+    restart: unless-stopped
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew --quiet; sleep 12h & wait $${!}; done;'"
+
+  nginx:
+    image: nginx:alpine
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/dhparam.pem:/etc/nginx/dhparam.pem:ro
+      - letsencrypt:/etc/letsencrypt:ro
+      - certbot_www:/var/www/certbot:ro
+    depends_on:
+      - spring-boot
+      - frontend
+      - certbot
+    command: /bin/sh -c "while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g 'daemon off;'"
+
+  backup:
+    image: ghcr.io/borgmatic-collective/borgmatic:2.1.10@sha256:25a97d84a2371c385c0031a02b64f7167de85631a85b84ef46dc01a80010d19e
+    restart: unless-stopped
+    environment:
+      TZ: Europe/Warsaw
+      CRON: ${BACKUP_CRON:-0 */6 * * *}
+      BORG_REPO: ${BORG_REPO:-}
+      BORG_PASSPHRASE: ${BORG_PASSPHRASE:-}
+      HEALTHCHECKS_URL: ${HEALTHCHECKS_URL:-}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./backup:/etc/borgmatic.d:ro
+      - ./backup/init:/custom-cont-init.d:ro
+      - ./backup/ssh:/backup-ssh:ro
+      - ./backup-local:/backup-local
+      - ./backup-restore:/restore
+      - card_files:/data/card-files:ro
+      - borg_cache:/root/.cache/borg
+      - borg_config:/root/.config/borg
+      - borgmatic_state:/root/.local/state/borgmatic
+    depends_on:
+      - postgres
+
+volumes:
+  postgres_data:
+  card_files:
+  letsencrypt:
+  certbot_www:
+  borg_cache:
+  borg_config:
+  borgmatic_state:
+
+secrets:
+  github_token:
+    environment: GITHUB_TOKEN

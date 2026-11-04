@@ -1,0 +1,43 @@
+<<: !include /etc/borgmatic-monitoring.yaml
+
+source_directories:
+    - /data/card-files
+
+source_directories_must_exist: true
+
+repositories:
+    - path: ${BORG_REPO}
+      label: clinicmanager
+      encryption: repokey-blake2
+      make_parent_directories: true
+
+encryption_passphrase: ${BORG_PASSPHRASE}
+
+ssh_command: ssh -i /backup-ssh/id_ed25519 -p 23 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/root/.config/borg/known_hosts -o ServerAliveInterval=30
+
+compression: zstd,6
+lock_wait: 120
+
+archive_name_format: "clinicmanager-{now:%Y-%m-%dT%H:%M:%S}"
+match_archives: "sh:clinicmanager-*"
+
+keep_within: 2d
+keep_daily: 14
+keep_weekly: 8
+keep_monthly: 24
+
+checks:
+    - name: repository
+      frequency: 2 weeks
+    - name: archives
+      frequency: 2 weeks
+
+check_last: 3
+
+postgresql_databases:
+    - name: clinicmanager
+      hostname: postgres
+      username: postgres
+      password: ${POSTGRES_PASSWORD}
+      format: custom
+      compression: 0

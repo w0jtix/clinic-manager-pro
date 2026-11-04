@@ -1,0 +1,907 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.5.xsd">
+
+    <changeSet id="2" author="Wojtek">
+        <createTable tableName="ksef_credentials">
+            <column name="id" type="BIGINT">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="nip" type="VARCHAR(10)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="encrypted_token" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="3" author="Wojtek">
+        <createTable tableName="ksef_seller">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="nip" type="VARCHAR(10)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="name" type="VARCHAR(200)"/>
+            <column name="address" type="VARCHAR(500)"/>
+            <column name="email" type="VARCHAR(255)"/>
+            <column name="phone" type="VARCHAR(50)"/>
+            <column name="auto_mark_products" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="default_expense_category" type="VARCHAR(40)"/>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="4" author="Wojtek">
+        <createTable tableName="ksef_invoice">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="ksef_reference_number" type="VARCHAR(100)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="invoice_number" type="VARCHAR(100)"/>
+            <column name="invoice_type" type="VARCHAR(20)"/>
+            <column name="issue_date" type="DATE"/>
+            <column name="payment_due_date" type="DATE"/>
+            <column name="buyer_nip" type="VARCHAR(10)"/>
+            <column name="net_amount" type="NUMERIC(15,2)"/>
+            <column name="vat_amount" type="NUMERIC(15,2)"/>
+            <column name="gross_amount" type="NUMERIC(15,2)"/>
+            <column name="currency" type="VARCHAR(3)" defaultValue="PLN"/>
+            <column name="is_paid" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="raw_xml" type="TEXT"/>
+            <column name="fetched_at" type="TIMESTAMP"/>
+            <column name="payment_date" type="DATE"/>
+            <column name="payment_method" type="VARCHAR(100)"/>
+            <column name="buyer_name" type="VARCHAR(200)"/>
+            <column name="buyer_address" type="VARCHAR(500)"/>
+            <column name="seller_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="category" type="VARCHAR(40)"/>
+            <column name="awaiting_product_verification" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="corrected_invoice_id" type="BIGINT"/>
+            <column name="corrected_ksef_number" type="VARCHAR(100)"/>
+        </createTable>
+
+        <addForeignKeyConstraint
+                baseTableName="ksef_invoice"
+                baseColumnNames="seller_id"
+                constraintName="fk_ksef_invoice_seller"
+                referencedTableName="ksef_seller"
+                referencedColumnNames="id"/>
+
+        <addForeignKeyConstraint
+                baseTableName="ksef_invoice"
+                baseColumnNames="corrected_invoice_id"
+                constraintName="fk_ksef_invoice_corrected"
+                referencedTableName="ksef_invoice"
+                referencedColumnNames="id"/>
+
+        <createIndex tableName="ksef_invoice" indexName="idx_ksef_invoice_corrected_ksef_number">
+            <column name="corrected_ksef_number"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="5" author="Wojtek">
+        <createTable tableName="ksef_invoice_item">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="invoice_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="ksef_item_name" type="VARCHAR(500)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="ksef_gtin" type="VARCHAR(50)"/>
+            <column name="unit" type="VARCHAR(20)"/>
+            <column name="quantity" type="NUMERIC(15,4)"/>
+            <column name="unit_net_price" type="NUMERIC(15,4)"/>
+            <column name="net_value" type="NUMERIC(15,2)"/>
+            <column name="vat_rate" type="VARCHAR(10)"/>
+            <column name="product_id" type="BIGINT"/>
+            <column name="declared_quantity" type="INTEGER"/>
+        </createTable>
+
+        <addForeignKeyConstraint
+                baseTableName="ksef_invoice_item"
+                baseColumnNames="invoice_id"
+                constraintName="fk_ksef_invoice_item_invoice"
+                referencedTableName="ksef_invoice"
+                referencedColumnNames="id"
+                onDelete="CASCADE"/>
+
+        <addForeignKeyConstraint
+                baseTableName="ksef_invoice_item"
+                baseColumnNames="product_id"
+                constraintName="fk_ksef_invoice_item_product"
+                referencedTableName="product"
+                referencedColumnNames="id"/>
+
+        <createIndex tableName="ksef_invoice_item" indexName="idx_ksef_invoice_item_invoice_id">
+            <column name="invoice_id"/>
+        </createIndex>
+
+        <createTable tableName="ksef_seller_item_mapping">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="seller_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="ksef_item_name" type="VARCHAR(500)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="ksef_gtin" type="VARCHAR(50)"/>
+            <column name="product_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint
+                baseTableName="ksef_seller_item_mapping"
+                baseColumnNames="seller_id"
+                constraintName="fk_ksef_seller_item_mapping_seller"
+                referencedTableName="ksef_seller"
+                referencedColumnNames="id"
+                onDelete="CASCADE"/>
+
+        <addForeignKeyConstraint
+                baseTableName="ksef_seller_item_mapping"
+                baseColumnNames="product_id"
+                constraintName="fk_ksef_seller_item_mapping_product"
+                referencedTableName="product"
+                referencedColumnNames="id"/>
+
+        <addUniqueConstraint
+                tableName="ksef_seller_item_mapping"
+                columnNames="seller_id, ksef_item_name"
+                constraintName="uq_ksef_seller_item_mapping_seller_name"/>
+
+        <createIndex tableName="ksef_seller_item_mapping" indexName="idx_ksef_seller_item_mapping_seller_gtin">
+            <column name="seller_id"/>
+            <column name="ksef_gtin"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="6" author="Wojtek">
+        <createTable tableName="ksef_sync_status">
+            <column name="id" type="BIGINT">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="status" type="VARCHAR(30)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_synced_at" type="TIMESTAMP"/>
+            <column name="last_attempt_at" type="TIMESTAMP"/>
+            <column name="last_new_count" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_failed_count" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="rate_limit_hit" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createTable tableName="ksef_sync_period">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="year" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="month" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="ksef_count" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="synced_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addUniqueConstraint
+                tableName="ksef_sync_period"
+                columnNames="year, month"
+                constraintName="uq_ksef_sync_period_year_month"/>
+    </changeSet>
+
+    <changeSet id="7" author="Wojtek">
+        <dropForeignKeyConstraint baseTableName="company_expense" constraintName="fkf3fr3kkto7grwym2n34govr89"/>
+        <dropUniqueConstraint tableName="company_expense" constraintName="uklr6athhuqys31rloxtl47fan0"/>
+        <dropColumn tableName="company_expense" columnName="order_id"/>
+        <dropColumn tableName="company_expense" columnName="invoice_number"/>
+
+        <sql>
+            ALTER TABLE company_expense DROP CONSTRAINT IF EXISTS company_expense_category_check;
+            ALTER TABLE company_expense ADD CONSTRAINT company_expense_category_check
+                CHECK (((category)::text = ANY ((ARRAY[
+                    'RENT'::character varying,
+                    'TAXES'::character varying,
+                    'ZUS'::character varying,
+                    'EQUIPMENT'::character varying,
+                    'SALARY'::character varying,
+                    'PRODUCTS'::character varying,
+                    'SERVICES'::character varying,
+                    'UNRELATED'::character varying,
+                    'OTHER'::character varying])::text[])));
+        </sql>
+
+        <addColumn tableName="company_expense_item">
+            <column name="product_id" type="BIGINT">
+                <constraints nullable="true"
+                             foreignKeyName="fk_expense_item_product"
+                             referencedTableName="product"
+                             referencedColumnNames="id"/>
+            </column>
+        </addColumn>
+        <createIndex tableName="company_expense_item" indexName="idx_company_expense_item_product_id">
+            <column name="product_id"/>
+        </createIndex>
+
+        <createView viewName="expense_unified" replaceIfExists="true">
+            SELECT
+                ('MANUAL-' || ce.id) AS unified_id,
+                ce.id AS source_id,
+                'MANUAL' AS source_type,
+                ce.source AS source,
+                ce.expense_date AS expense_date,
+                ce.category AS category,
+                CAST(ce.total_net AS NUMERIC(15,2)) AS total_net,
+                CAST(ce.total_vat AS NUMERIC(15,2)) AS total_vat,
+                CAST(ce.total_value AS NUMERIC(15,2)) AS total_value,
+                CAST(false AS BOOLEAN) AS awaiting_product_verification,
+                CAST(NULL AS VARCHAR) AS seller_default_expense_category,
+                CAST(NULL AS VARCHAR) AS invoice_type
+            FROM company_expense ce
+            UNION ALL
+            SELECT
+                ('KSEF-' || ki.id) AS unified_id,
+                ki.id AS source_id,
+                'KSEF' AS source_type,
+                ks.name AS source,
+                ki.issue_date AS expense_date,
+                ki.category AS category,
+                CAST(ki.net_amount AS NUMERIC(15,2)) AS total_net,
+                CAST(ki.vat_amount AS NUMERIC(15,2)) AS total_vat,
+                CAST(ki.gross_amount AS NUMERIC(15,2)) AS total_value,
+                ki.awaiting_product_verification AS awaiting_product_verification,
+                ks.default_expense_category AS seller_default_expense_category,
+                ki.invoice_type AS invoice_type
+            FROM ksef_invoice ki
+            JOIN ksef_seller ks ON ks.id = ki.seller_id
+        </createView>
+
+        <createView viewName="product_purchase" replaceIfExists="true">
+            SELECT
+                kii.product_id AS product_id,
+                'KSEF' AS source_type,
+                kii.id AS source_id,
+                ki.issue_date AS purchase_date,
+                CAST(COALESCE(kii.net_value / NULLIF(kii.declared_quantity, 0), kii.unit_net_price) AS NUMERIC(15,4)) AS unit_net_price,
+                CAST(NULL AS NUMERIC(15,4)) AS unit_gross_price,
+                kii.declared_quantity AS quantity,
+                kii.vat_rate AS vat_rate
+            FROM ksef_invoice_item kii
+            JOIN ksef_invoice ki ON ki.id = kii.invoice_id
+            WHERE kii.product_id IS NOT NULL
+              AND kii.declared_quantity IS NOT NULL
+              AND kii.declared_quantity > 0
+            UNION ALL
+            SELECT
+                cei.product_id AS product_id,
+                'MANUAL' AS source_type,
+                cei.id AS source_id,
+                ce.expense_date AS purchase_date,
+                CAST(NULL AS NUMERIC(15,4)) AS unit_net_price,
+                CAST(cei.price AS NUMERIC(15,4)) AS unit_gross_price,
+                cei.quantity AS quantity,
+                cei.vat_rate AS vat_rate
+            FROM company_expense_item cei
+            JOIN company_expense ce ON ce.id = cei.company_expense_id
+            WHERE cei.product_id IS NOT NULL
+              AND cei.quantity IS NOT NULL
+              AND cei.quantity > 0
+        </createView>
+    </changeSet>
+
+    <changeSet id="8" author="Wojtek">
+        <dropTable tableName="order_product"/>
+        <dropTable tableName="internal_order"/>
+        <dropTable tableName="supplier"/>
+    </changeSet>
+
+    <changeSet id="9" author="Wojtek">
+        <addColumn tableName="company_expense">
+            <column name="employee_id" type="BIGINT">
+                <constraints nullable="true"
+                             foreignKeyName="fk_company_expense_employee"
+                             referencedTableName="employee"
+                             referencedColumnNames="id"/>
+            </column>
+        </addColumn>
+        <createIndex tableName="company_expense" indexName="idx_company_expense_employee_id">
+            <column name="employee_id"/>
+        </createIndex>
+
+        <addColumn tableName="company_expense_item">
+            <column name="salary_component" type="VARCHAR(20)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="10" author="Wojtek">
+        <addColumn tableName="service">
+            <column name="display_order" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+        <createIndex tableName="service" indexName="idx_service_display_order">
+            <column name="display_order"/>
+        </createIndex>
+
+        <sql>
+            UPDATE service s SET display_order = t.rn - 1
+            FROM (SELECT id, ROW_NUMBER() OVER (ORDER BY service_category_id, name) AS rn FROM service) t
+            WHERE s.id = t.id;
+        </sql>
+    </changeSet>
+
+    <changeSet id="11" author="Wojtek">
+        <createTable tableName="product_supply_history">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="product_id" type="BIGINT">
+                <constraints nullable="false"
+                             foreignKeyName="fk_product_supply_history_product"
+                             referencedTableName="product"
+                             referencedColumnNames="id"/>
+            </column>
+            <column name="delta" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="supply_after" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source" type="VARCHAR(40)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source_id" type="BIGINT"/>
+            <column name="source_label" type="VARCHAR(255)"/>
+            <column name="occurred_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="performed_by" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="product_supply_history" indexName="idx_product_supply_history_product_occurred">
+            <column name="product_id"/>
+            <column name="occurred_at"/>
+        </createIndex>
+        <createIndex tableName="product_supply_history" indexName="idx_product_supply_history_source">
+            <column name="source"/>
+            <column name="source_id"/>
+        </createIndex>
+
+        <sql>
+            INSERT INTO product_supply_history
+                (product_id, delta, supply_after, source, source_label, occurred_at, performed_by)
+            SELECT id, supply, supply, 'INITIAL_BALANCE', 'Stan początkowy', NOW(), 'SYSTEM'
+            FROM product WHERE supply &lt;&gt; 0;
+        </sql>
+    </changeSet>
+
+    <changeSet id="12" author="Wojtek">
+        <createView viewName="expense_unified" replaceIfExists="true">
+            SELECT
+                ('MANUAL-' || ce.id) AS unified_id,
+                ce.id AS source_id,
+                'MANUAL' AS source_type,
+                ce.source AS source,
+                ce.expense_date AS expense_date,
+                ce.category AS category,
+                CAST(ce.total_net AS NUMERIC(15,2)) AS total_net,
+                CAST(ce.total_vat AS NUMERIC(15,2)) AS total_vat,
+                CAST(ce.total_value AS NUMERIC(15,2)) AS total_value,
+                CAST(false AS BOOLEAN) AS awaiting_product_verification,
+                CAST(NULL AS VARCHAR) AS seller_default_expense_category,
+                CAST(NULL AS VARCHAR) AS invoice_type,
+                CAST(NULL AS BIGINT) AS seller_id
+            FROM company_expense ce
+            UNION ALL
+            SELECT
+                ('KSEF-' || ki.id) AS unified_id,
+                ki.id AS source_id,
+                'KSEF' AS source_type,
+                ks.name AS source,
+                ki.issue_date AS expense_date,
+                ki.category AS category,
+                CAST(ki.net_amount AS NUMERIC(15,2)) AS total_net,
+                CAST(ki.vat_amount AS NUMERIC(15,2)) AS total_vat,
+                CAST(ki.gross_amount AS NUMERIC(15,2)) AS total_value,
+                ki.awaiting_product_verification AS awaiting_product_verification,
+                ks.default_expense_category AS seller_default_expense_category,
+                ki.invoice_type AS invoice_type,
+                ki.seller_id AS seller_id
+            FROM ksef_invoice ki
+            JOIN ksef_seller ks ON ks.id = ki.seller_id
+        </createView>
+    </changeSet>
+
+    <changeSet id="13" author="Wojtek">
+        <addColumn tableName="ksef_invoice_item">
+            <column name="unit_gross_price" type="DECIMAL(15,4)"/>
+            <column name="gross_value" type="DECIMAL(15,2)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="14" author="Wojtek">
+        <sql>
+            UPDATE ksef_invoice_item SET
+                unit_gross_price = ROUND(unit_net_price * CASE vat_rate
+                    WHEN 'VAT_23' THEN 1.23 WHEN 'VAT_8' THEN 1.08 WHEN 'VAT_7' THEN 1.07
+                    WHEN 'VAT_5' THEN 1.05 ELSE 1.00 END, 4),
+                gross_value = ROUND(net_value * CASE vat_rate
+                    WHEN 'VAT_23' THEN 1.23 WHEN 'VAT_8' THEN 1.08 WHEN 'VAT_7' THEN 1.07
+                    WHEN 'VAT_5' THEN 1.05 ELSE 1.00 END, 2);
+        </sql>
+    </changeSet>
+
+    <changeSet id="15" author="Wojtek">
+        <addColumn tableName="client">
+            <column name="email" type="VARCHAR(255)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="16" author="Wojtek">
+        <addColumn tableName="product">
+            <column name="low_stock_threshold" type="INT" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="17" author="Wojtek">
+        <sql>
+            ALTER TABLE company_expense DROP CONSTRAINT IF EXISTS company_expense_category_check;
+            ALTER TABLE company_expense ADD CONSTRAINT company_expense_category_check
+                CHECK (((category)::text = ANY ((ARRAY[
+                    'RENT'::character varying,
+                    'TAXES'::character varying,
+                    'ZUS'::character varying,
+                    'EQUIPMENT'::character varying,
+                    'SALARY'::character varying,
+                    'PRODUCTS'::character varying,
+                    'SERVICES'::character varying,
+                    'CAR'::character varying,
+                    'TRAINING'::character varying,
+                    'SUPPLIES'::character varying,
+                    'UNRELATED'::character varying,
+                    'OTHER'::character varying])::text[])));
+        </sql>
+    </changeSet>
+
+    <changeSet id="18" author="Wojtek">
+        <createTable tableName="ksef_issued_invoice">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="ksef_reference_number" type="VARCHAR(100)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="invoice_number" type="VARCHAR(100)"/>
+            <column name="invoice_type" type="VARCHAR(20)"/>
+            <column name="issue_date" type="DATE"/>
+            <column name="payment_due_date" type="DATE"/>
+            <column name="buyer_name" type="VARCHAR(200)"/>
+            <column name="buyer_nip" type="VARCHAR(10)"/>
+            <column name="buyer_address" type="VARCHAR(500)"/>
+            <column name="net_amount" type="NUMERIC(15,2)"/>
+            <column name="vat_amount" type="NUMERIC(15,2)"/>
+            <column name="gross_amount" type="NUMERIC(15,2)"/>
+            <column name="currency" type="VARCHAR(3)" defaultValue="PLN"/>
+            <column name="corrected_ksef_number" type="VARCHAR(100)"/>
+            <column name="raw_xml" type="TEXT"/>
+            <column name="fetched_at" type="TIMESTAMP"/>
+        </createTable>
+
+        <createIndex tableName="ksef_issued_invoice" indexName="idx_ksef_issued_invoice_issue_date">
+            <column name="issue_date"/>
+        </createIndex>
+
+        <createTable tableName="ksef_issued_invoice_item">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="invoice_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="ksef_item_name" type="VARCHAR(500)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="unit" type="VARCHAR(20)"/>
+            <column name="quantity" type="NUMERIC(15,4)"/>
+            <column name="unit_net_price" type="NUMERIC(15,4)"/>
+            <column name="net_value" type="NUMERIC(15,2)"/>
+            <column name="unit_gross_price" type="NUMERIC(15,4)"/>
+            <column name="gross_value" type="NUMERIC(15,2)"/>
+            <column name="vat_rate" type="VARCHAR(10)"/>
+        </createTable>
+
+        <addForeignKeyConstraint
+                baseTableName="ksef_issued_invoice_item"
+                baseColumnNames="invoice_id"
+                constraintName="fk_ksef_issued_invoice_item_invoice"
+                referencedTableName="ksef_issued_invoice"
+                referencedColumnNames="id"
+                onDelete="CASCADE"/>
+
+        <createIndex tableName="ksef_issued_invoice_item" indexName="idx_ksef_issued_invoice_item_invoice_id">
+            <column name="invoice_id"/>
+        </createIndex>
+
+        <addColumn tableName="ksef_sync_status">
+            <column name="last_issued_new_count" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_issued_failed_count" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="19" author="Wojtek">
+        <addColumn tableName="ksef_issued_invoice">
+            <column name="seller_name" type="VARCHAR(200)"/>
+            <column name="seller_nip" type="VARCHAR(10)"/>
+            <column name="seller_address" type="VARCHAR(500)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="20" author="Wojtek">
+        <addColumn tableName="client">
+            <column name="address" type="VARCHAR(255)"/>
+            <column name="postal_code" type="VARCHAR(20)"/>
+            <column name="city" type="VARCHAR(120)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="21" author="Wojtek">
+        <addColumn tableName="stat_settings">
+            <column name="company_name" type="VARCHAR(200)"/>
+            <column name="company_address" type="VARCHAR(255)"/>
+            <column name="company_postal_code" type="VARCHAR(20)"/>
+            <column name="company_city" type="VARCHAR(120)"/>
+            <column name="company_nip" type="VARCHAR(20)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="22" author="Wojtek">
+        <createTable tableName="named_invoice">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="invoice_number" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="sequence_in_month" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="year" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="month" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="issue_date" type="DATE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="client_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source_visit_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="buyer_name" type="VARCHAR(200)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="buyer_address" type="VARCHAR(255)"/>
+            <column name="buyer_postal_code" type="VARCHAR(20)"/>
+            <column name="buyer_city" type="VARCHAR(120)"/>
+            <column name="buyer_email" type="VARCHAR(200)"/>
+            <column name="net_amount" type="NUMERIC(15,2)"/>
+            <column name="vat_amount" type="NUMERIC(15,2)"/>
+            <column name="gross_amount" type="NUMERIC(15,2)"/>
+            <column name="email_sent_at" type="TIMESTAMP"/>
+            <column name="created_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by_user_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint
+                baseTableName="named_invoice"
+                baseColumnNames="client_id"
+                constraintName="fk_named_invoice_client"
+                referencedTableName="client"
+                referencedColumnNames="id"/>
+
+        <addUniqueConstraint
+                tableName="named_invoice"
+                columnNames="year, month, sequence_in_month"
+                constraintName="uq_named_invoice_year_month_sequence"/>
+
+        <createIndex tableName="named_invoice" indexName="idx_named_invoice_source_visit_id">
+            <column name="source_visit_id"/>
+        </createIndex>
+
+        <createTable tableName="named_invoice_item">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="invoice_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR(500)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="quantity" type="NUMERIC(15,4)" defaultValueNumeric="1"/>
+            <column name="unit_net_price" type="NUMERIC(15,4)"/>
+            <column name="net_value" type="NUMERIC(15,2)"/>
+            <column name="unit_gross_price" type="NUMERIC(15,4)"/>
+            <column name="gross_value" type="NUMERIC(15,2)"/>
+            <column name="vat_rate" type="VARCHAR(10)"/>
+            <column name="source_type" type="VARCHAR(20)"/>
+        </createTable>
+
+        <addForeignKeyConstraint
+                baseTableName="named_invoice_item"
+                baseColumnNames="invoice_id"
+                constraintName="fk_named_invoice_item_invoice"
+                referencedTableName="named_invoice"
+                referencedColumnNames="id"
+                onDelete="CASCADE"/>
+
+        <createIndex tableName="named_invoice_item" indexName="idx_named_invoice_item_invoice_id">
+            <column name="invoice_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="23" author="Wojtek">
+        <addColumn tableName="named_invoice">
+            <column name="sale_date" type="DATE"/>
+            <column name="payment_method" type="VARCHAR(20)"/>
+            <column name="notes" type="TEXT"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="24" author="Wojtek">
+        <createTable tableName="named_invoice_payment_method">
+            <column name="named_invoice_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="payment_method" type="VARCHAR(20)"/>
+        </createTable>
+
+        <addForeignKeyConstraint
+                baseTableName="named_invoice_payment_method"
+                baseColumnNames="named_invoice_id"
+                constraintName="fk_named_invoice_payment_method_invoice"
+                referencedTableName="named_invoice"
+                referencedColumnNames="id"
+                onDelete="CASCADE"/>
+
+        <dropColumn tableName="named_invoice" columnName="payment_method"/>
+    </changeSet>
+
+    <changeSet id="25" author="Wojtek">
+        <addColumn tableName="stat_settings">
+            <column name="company_logo" type="BLOB"/>
+            <column name="company_logo_content_type" type="VARCHAR(50)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="26" author="Wojtek">
+        <addColumn tableName="named_invoice">
+            <column name="sent_to" type="VARCHAR(255)"/>
+        </addColumn>
+        <dropColumn tableName="named_invoice" columnName="buyer_email"/>
+        <addColumn tableName="stat_settings">
+            <column name="invoice_email_bcc" type="VARCHAR(255)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="27" author="Wojtek">
+        <sql>ALTER TABLE audit_log DROP CONSTRAINT IF EXISTS audit_log_action_check</sql>
+        <sql>ALTER TABLE audit_log ADD CONSTRAINT audit_log_action_check CHECK (action IN ('CREATE', 'UPDATE', 'DELETE', 'SEND'))</sql>
+    </changeSet>
+
+    <changeSet id="28" author="Wojtek">
+        <addColumn tableName="stat_settings">
+            <column name="footer_company_name" type="VARCHAR(255)"/>
+            <column name="footer_address" type="VARCHAR(255)"/>
+            <column name="footer_postal_code" type="VARCHAR(20)"/>
+            <column name="footer_city" type="VARCHAR(100)"/>
+            <column name="company_phone" type="VARCHAR(50)"/>
+            <column name="company_website" type="VARCHAR(255)"/>
+            <column name="facebook_url" type="VARCHAR(255)"/>
+            <column name="instagram_url" type="VARCHAR(255)"/>
+            <column name="booksy_url" type="VARCHAR(255)"/>
+            <column name="email_footer_logo" type="BLOB"/>
+            <column name="email_footer_logo_content_type" type="VARCHAR(50)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="29" author="Wojtek">
+        <addColumn tableName="company_expense">
+            <column name="seller_id" type="BIGINT"/>
+        </addColumn>
+
+        <addForeignKeyConstraint
+                baseTableName="company_expense"
+                baseColumnNames="seller_id"
+                constraintName="fk_company_expense_seller"
+                referencedTableName="ksef_seller"
+                referencedColumnNames="id"/>
+
+        <createIndex tableName="company_expense" indexName="idx_company_expense_seller_id">
+            <column name="seller_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="30" author="Wojtek">
+        <createView viewName="expense_unified" replaceIfExists="true">
+            SELECT
+                ('MANUAL-' || ce.id) AS unified_id,
+                ce.id AS source_id,
+                'MANUAL' AS source_type,
+                ce.source AS source,
+                ce.expense_date AS expense_date,
+                ce.category AS category,
+                CAST(ce.total_net AS NUMERIC(15,2)) AS total_net,
+                CAST(ce.total_vat AS NUMERIC(15,2)) AS total_vat,
+                CAST(ce.total_value AS NUMERIC(15,2)) AS total_value,
+                CAST(false AS BOOLEAN) AS awaiting_product_verification,
+                CAST(NULL AS VARCHAR) AS seller_default_expense_category,
+                CAST(NULL AS VARCHAR) AS invoice_type,
+                ce.seller_id AS seller_id
+            FROM company_expense ce
+            UNION ALL
+            SELECT
+                ('KSEF-' || ki.id) AS unified_id,
+                ki.id AS source_id,
+                'KSEF' AS source_type,
+                ks.name AS source,
+                ki.issue_date AS expense_date,
+                ki.category AS category,
+                CAST(ki.net_amount AS NUMERIC(15,2)) AS total_net,
+                CAST(ki.vat_amount AS NUMERIC(15,2)) AS total_vat,
+                CAST(ki.gross_amount AS NUMERIC(15,2)) AS total_value,
+                ki.awaiting_product_verification AS awaiting_product_verification,
+                ks.default_expense_category AS seller_default_expense_category,
+                ki.invoice_type AS invoice_type,
+                ki.seller_id AS seller_id
+            FROM ksef_invoice ki
+            JOIN ksef_seller ks ON ks.id = ki.seller_id
+        </createView>
+    </changeSet>
+
+    <changeSet id="31" author="Wojtek">
+        <addColumn tableName="company_expense_item">
+            <column name="category" type="VARCHAR(255)"/>
+        </addColumn>
+
+        <sql>
+            ALTER TABLE company_expense DROP CONSTRAINT IF EXISTS company_expense_category_check;
+            ALTER TABLE company_expense ADD CONSTRAINT company_expense_category_check
+                CHECK (((category)::text = ANY ((ARRAY[
+                    'RENT'::character varying,
+                    'TAXES'::character varying,
+                    'ZUS'::character varying,
+                    'EQUIPMENT'::character varying,
+                    'SALARY'::character varying,
+                    'PRODUCTS'::character varying,
+                    'SERVICES'::character varying,
+                    'CAR'::character varying,
+                    'TRAINING'::character varying,
+                    'SUPPLIES'::character varying,
+                    'UNRELATED'::character varying,
+                    'OTHER'::character varying,
+                    'MIXED'::character varying])::text[])));
+        </sql>
+
+        <createView viewName="expense_category_amount" replaceIfExists="true">
+            SELECT
+                'MANUAL' AS source_type,
+                ce.id AS source_id,
+                CAST(NULL AS BIGINT) AS source_item_id,
+                ce.expense_date AS expense_date,
+                ce.category AS category,
+                CAST(ce.total_net AS NUMERIC(15,2)) AS total_net,
+                CAST(ce.total_vat AS NUMERIC(15,2)) AS total_vat,
+                CAST(ce.total_value AS NUMERIC(15,2)) AS total_value,
+                ce.seller_id AS seller_id
+            FROM company_expense ce
+            WHERE ce.category &lt;&gt; 'MIXED'
+            UNION ALL
+            SELECT
+                'MANUAL' AS source_type,
+                ce.id AS source_id,
+                it.item_id AS source_item_id,
+                ce.expense_date AS expense_date,
+                it.category AS category,
+                CAST(ROUND(it.gross - it.vat, 2) AS NUMERIC(15,2)) AS total_net,
+                CAST(it.vat AS NUMERIC(15,2)) AS total_vat,
+                CAST(ROUND(it.gross, 2) AS NUMERIC(15,2)) AS total_value,
+                ce.seller_id AS seller_id
+            FROM (
+                SELECT
+                    g.item_id,
+                    g.company_expense_id,
+                    g.category,
+                    g.gross,
+                    ROUND(g.gross * g.vat_percent / (100 + g.vat_percent), 2) AS vat
+                FROM (
+                    SELECT
+                        cei.id AS item_id,
+                        cei.company_expense_id AS company_expense_id,
+                        cei.category AS category,
+                        CAST(cei.price AS NUMERIC) * cei.quantity AS gross,
+                        CAST(CASE cei.vat_rate
+                            WHEN 'VAT_23' THEN 23
+                            WHEN 'VAT_8' THEN 8
+                            WHEN 'VAT_7' THEN 7
+                            WHEN 'VAT_5' THEN 5
+                            ELSE 0
+                        END AS NUMERIC) AS vat_percent
+                    FROM company_expense_item cei
+                ) g
+            ) it
+            JOIN company_expense ce ON ce.id = it.company_expense_id
+            WHERE ce.category = 'MIXED'
+            UNION ALL
+            SELECT
+                'KSEF' AS source_type,
+                ki.id AS source_id,
+                CAST(NULL AS BIGINT) AS source_item_id,
+                ki.issue_date AS expense_date,
+                ki.category AS category,
+                CAST(ki.net_amount AS NUMERIC(15,2)) AS total_net,
+                CAST(ki.vat_amount AS NUMERIC(15,2)) AS total_vat,
+                CAST(ki.gross_amount AS NUMERIC(15,2)) AS total_value,
+                ki.seller_id AS seller_id
+            FROM ksef_invoice ki
+            JOIN ksef_seller ks ON ks.id = ki.seller_id
+        </createView>
+    </changeSet>
+
+    <changeSet id="32" author="Wojtek">
+        <addColumn tableName="ksef_invoice_item">
+            <column name="line_number" type="INTEGER"/>
+            <column name="line_uuid" type="VARCHAR(100)"/>
+        </addColumn>
+    </changeSet>
+
+</databaseChangeLog>

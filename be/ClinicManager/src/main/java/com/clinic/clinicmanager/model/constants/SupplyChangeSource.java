@@ -1,0 +1,19 @@
+package com.clinic.clinicmanager.model.constants;
+
+public enum SupplyChangeSource {
+    INITIAL_BALANCE,
+    PRODUCT_CREATED,
+    PRODUCT_FORM,
+    PRODUCT_DELETED,
+    PRODUCT_RESTORED,
+    COMPANY_EXPENSE,
+    COMPANY_EXPENSE_DELETED,
+    KSEF_INVOICE,
+    KSEF_CORRECTION,
+    USAGE_RECORD,
+    USAGE_REVERT,
+    INVENTORY_REPORT,
+    INVENTORY_REPORT_REVERT,
+    VISIT_SALE,
+    VISIT_DELETED
+}

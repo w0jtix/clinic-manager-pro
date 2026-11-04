@@ -1,0 +1,8 @@
+package com.clinic.clinicmanager.repo.projection;
+
+import java.math.BigDecimal;
+
+public interface CompanyExpenseProjection {
+    Integer getPeriod();
+    BigDecimal getTotalExpense();
+}
